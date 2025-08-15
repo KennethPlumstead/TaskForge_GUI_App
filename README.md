@@ -1,7 +1,5 @@
 # TaskForge — Weekly Planner (Java GUI App)
 
-![TaskForge Demo](assets/demo.gif)
-
 **TaskForge 1.2.0** is a Java Swing-based GUI application developed as part of an academic assignment during my Mobile Web Development studies.  
 This project is **fictional** and created purely for **educational purposes** and to **showcase programming skills**.
 
