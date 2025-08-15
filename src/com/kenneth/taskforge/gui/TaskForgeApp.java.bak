@@ -1,0 +1,252 @@
+
+package com.kenneth.taskforge.gui;
+
+import com.kenneth.taskforge.model.Plan;
+import com.kenneth.taskforge.model.Task;
+import com.kenneth.taskforge.store.Store;
+import com.kenneth.taskforge.export.MarkdownExport;
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.AbstractTableModel;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.awt.event.ActionEvent;
+import java.io.File;
+import java.nio.file.Files;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+public class TaskForgeApp extends JFrame {
+
+    private Plan plan;
+    private JTextField weekField;
+    private TaskTableModel model;
+    private JTable table;
+    private JLabel status;
+
+    public TaskForgeApp() {
+        super("TaskForge — Weekly Planner");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setMinimumSize(new Dimension(980, 640));
+        setLocationByPlatform(true);
+        setIconImage(loadIcon("/app.png"));
+
+        Theme.applyNimbus();
+
+        plan = Store.load();
+
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(Theme.BG);
+        root.setBorder(new EmptyBorder(12,12,12,12));
+
+        // Top bar
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        top.setBackground(Theme.BG);
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(Theme.BG);
+        JLabel title = new JLabel("TaskForge 1.2.0");
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 20f));
+        title.setForeground(Theme.ACCENT);
+        header.add(title, BorderLayout.WEST);
+
+        JPanel weekPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        weekPanel.setOpaque(false);
+        JLabel weekLbl = new JLabel("Week start:");
+        weekLbl.setForeground(Theme.TEXT);
+        weekPanel.add(weekLbl);
+        weekField = new JTextField(10);
+        if(plan.getWeekStart()!=null) weekField.setText(plan.getWeekStart().format(DateTimeFormatter.ISO_DATE));
+        weekPanel.add(weekField);
+        header.add(weekPanel, BorderLayout.EAST);
+toolbar.setFloatable(false);
+        toolbar.setBackground(Theme.BG);
+        JButton addBtn = iconButton(" Add", "/add.png", e -> addTask());
+        JButton editBtn = iconButton(" Edit", "/edit.png", e -> editSelected());
+        JButton delBtn = iconButton(" Delete", "/del.png", e -> deleteSelected());
+        JButton saveBtn = iconButton(" Save", "/save.png", e -> savePlan());
+        JButton exportBtn = iconButton(" Export", "/export.png", e -> exportMarkdown());
+        JButton openBtn = iconButton(" Plans", "/open.png", e -> openPlansFolder());
+        toolbar.add(addBtn); toolbar.add(editBtn); toolbar.add(delBtn);
+        toolbar.addSeparator(); toolbar.add(saveBtn); toolbar.add(exportBtn); toolbar.add(openBtn);
+
+        top.add(header);
+        top.add(toolbar);
+
+        // Toolbar
+toolbar.setFloatable(false);
+        toolbar.add(iconButton(" Add Task", "/add.png", e -> addTask()));
+        toolbar.add(iconButton(" Edit", "/edit.png", e -> editSelected()));
+        toolbar.add(iconButton(" Delete", "/del.png", e -> deleteSelected()));
+        toolbar.addSeparator();
+        toolbar.add(saveBtn);
+        toolbar.add(exportBtn);
+        toolbar.add(openBtn);
+
+        // Table
+        model = new TaskTableModel(plan.getTasks());
+        table = new JTable(model);
+        Theme.styleTable(table);
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.getViewport().setBackground(Theme.BG_ALT);
+        scroll.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.BORDER), BorderFactory.createEmptyBorder(4,4,4,4)));
+
+        // Status
+        status = new JLabel(" Ready.");
+        status.setForeground(Theme.MUTED);
+        status.setBorder(new EmptyBorder(6,4,6,4));
+        JPanel statusWrap = new JPanel(new BorderLayout());
+        statusWrap.setBackground(Theme.SURFACE);
+        statusWrap.setBorder(BorderFactory.createMatteBorder(1,0,0,0, Theme.BORDER));
+        statusWrap.add(status, BorderLayout.WEST);
+
+        root.add(top, BorderLayout.NORTH);
+        
+        root.add(scroll, BorderLayout.CENTER);
+        root.add(statusWrap, BorderLayout.SOUTH);
+        setContentPane(root);
+        pack();
+    }
+
+    private JButton iconButton(String text, String res, AbstractAction action){
+        JButton b = new JButton(action);
+        b.setText(text);
+        b.setIcon(new ImageIcon(loadIcon(res).getScaledInstance(18,18,Image.SCALE_SMOOTH)));
+        b.setFocusPainted(false);
+        b.setBorderPainted(false);
+        b.setOpaque(true);
+        b.setBorder(new EmptyBorder(8,12,8,12));
+        return b;
+    }
+    private JButton iconButton(String text, String res, java.awt.event.ActionListener fn){
+        JButton b = new JButton(text);
+        b.setIcon(new ImageIcon(loadIcon(res).getScaledInstance(18,18,Image.SCALE_SMOOTH)));
+        b.addActionListener(fn);
+        b.setFocusPainted(false);
+        b.setBorderPainted(false);
+        b.setOpaque(true);
+        b.setBorder(new EmptyBorder(8,12,8,12));
+        return b;
+    }
+
+    private Image loadIcon(String path){
+        try {
+            return new ImageIcon(TaskForgeApp.class.getResource(path)).getImage();
+        } catch (Exception e){
+            return new BufferedImage(32,32,BufferedImage.TYPE_INT_ARGB);
+        }
+    }
+
+    private void addTask(){
+        Task t = TaskDialog.show(this, null);
+        if(t != null){
+            model.add(t);
+            status("Added: " + t.getTitle());
+        }
+    }
+
+    private void editSelected(){
+        int row = table.getSelectedRow();
+        if(row < 0){ warn("Select a task to edit."); return; }
+        Task t = model.get(row);
+        Task edited = TaskDialog.show(this, t);
+        if(edited != null){
+            model.set(row, edited);
+            status("Updated: " + edited.getTitle());
+        }
+    }
+
+    private void deleteSelected(){
+        int row = table.getSelectedRow();
+        if(row < 0){ warn("Select a task to delete."); return; }
+        Task t = model.get(row);
+        int ok = JOptionPane.showConfirmDialog(this, "Delete \""+t.getTitle()+"\"?", "Confirm", JOptionPane.OK_CANCEL_OPTION);
+        if(ok == JOptionPane.OK_OPTION){
+            model.remove(row);
+            status("Deleted.");
+        }
+    }
+
+    private void savePlan(){
+        try {
+            LocalDate d = LocalDate.parse(weekField.getText().trim());
+            plan.setWeekStart(d);
+        } catch(Exception e){
+            warn("Week date must be YYYY-MM-DD");
+            return;
+        }
+        plan.setTasks(model.items);
+        try {
+            com.kenneth.taskforge.store.Store.save(plan);
+            status("Saved ✓  →  " + com.kenneth.taskforge.store.Store.dataFile());
+        } catch(Exception e){
+            warn("Save failed: " + e.getMessage());
+        }
+    }
+
+    private void exportMarkdown(){
+        try {
+            savePlan(); // ensure plan saved and date valid
+            File f = MarkdownExport.export(plan);
+            status("Exported → " + f.getAbsolutePath());
+            int choice = JOptionPane.showConfirmDialog(this, "Open exported Markdown?", "Open", JOptionPane.YES_NO_OPTION);
+            if(choice == JOptionPane.YES_OPTION){
+                Desktop.getDesktop().open(f);
+            }
+        } catch(Exception e){
+            warn("Export failed: " + e.getMessage());
+        }
+    }
+
+    private void openPlansFolder(){
+        try {
+            Desktop.getDesktop().open(Store.plansDir().toFile());
+        } catch(Exception e){
+            warn("Cannot open folder: " + e.getMessage());
+        }
+    }
+
+    private void warn(String msg){
+        JOptionPane.showMessageDialog(this, msg, "TaskForge", JOptionPane.WARNING_MESSAGE);
+        status.setText(" " + msg);
+    }
+    private void status(String msg){
+        status.setText(" " + msg);
+    }
+
+    public static void main(String[] args){
+        SwingUtilities.invokeLater(() -> {
+            TaskForgeApp app = new TaskForgeApp();
+            app.setVisible(true);
+        });
+    }
+
+    // Table model
+    static class TaskTableModel extends AbstractTableModel {
+        String[] cols = {"Title","Priority","Due","Hours","Tags"};
+        List<Task> items;
+        TaskTableModel(List<Task> t){ items = new ArrayList<Task>(t); }
+        public int getRowCount(){ return items.size(); }
+        public int getColumnCount(){ return cols.length; }
+        public String getColumnName(int c){ return cols[c]; }
+        public Object getValueAt(int r,int c){
+            Task t = items.get(r);
+            switch(c){
+                case 0: return t.getTitle();
+                case 1: return t.getPriority()==1? "High" : t.getPriority()==2? "Medium" : "Low";
+                case 2: return t.dueString();
+                case 3: return t.getHours()==null? "" : t.getHours();
+                case 4: return t.getTags();
+            }
+            return "";
+        }
+        public Task get(int r){ return items.get(r); }
+        public void add(Task t){ items.add(t); fireTableDataChanged(); }
+        public void set(int r, Task t){ items.set(r,t); fireTableRowsUpdated(r,r); }
+        public void remove(int r){ items.remove(r); fireTableRowsDeleted(r,r); }
+    }
+}
